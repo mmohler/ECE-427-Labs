@@ -1,0 +1,268 @@
+
+; You may customize this and other start-up templates; 
+; The location of this template is c:\emu8086\inc\0_com_template.txt
+
+org 100h
+
+
+
+.DATA
+MSG_1   DB 'Enter the first operand: $'
+MSG_2   DB 'Enter the operator: $'
+MSG_3   DB 'Enter the second operand: $'
+NUM_1   DB 0  ;Define First Operand
+NUM_2   DB 0  ;Define Second Operand
+RESULT  DB 0FFH ;Define two bytes for result
+REMAIN  DB 'REMAINDER = 0$' ;Define string for remainder
+OP      DB '0';Define Operator Code (+,-,*,/) 
+ASC_OUT DB '00H$'
+
+.CODE
+
+
+
+MAIN PROC
+    MOV AX,@DATA
+    MOV DS,AX
+    
+    ;CLEAR THE SCREEN
+    MOV AX,0600H
+    MOV BH,07
+    MOV CX,0
+    MOV DX,184FH
+    INT 10H
+
+;GRAB AND HANDLE NUM1
+    
+    ;SET CURSOR POSITION
+    MOV AH,02
+    MOV BH,00
+    MOV DH,00 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H     
+    ;PROMPT FOR FIRST NUMBER
+    LEA DX,MSG_1
+    MOV AH,09
+    INT 21H
+    ;GET FIRST NUMBER
+    MOV AH,01
+    INT 21H
+    ;CONVERT FROM ASCII
+    AND AL,0FH
+    ;SAVE IN MEMORY
+    MOV DI,OFFSET NUM_1
+    MOV [DI],AL
+
+
+;GRAB AND HANDLE THE OPERATOR
+    
+    ;SET CURSOR POSITION
+    MOV AH,02
+    MOV BH,00
+    MOV DH,01 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H     
+    ;PROMPT FOR OPERATOR
+    LEA DX,MSG_2
+    MOV AH,09
+    INT 21H
+    ;GET OPERATOR
+    MOV AH,01
+    INT 21H
+    ;SAVE IN MEMORY
+    MOV DI,OFFSET OP
+    MOV [DI],AL
+
+
+;GRAB AND HANDLE NUM2
+    
+    ;SET CURSOR POSITION
+    MOV AH,02
+    MOV BH,00
+    MOV DH,02 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H     
+    ;PROMPT FOR SECOND NUMBER
+    LEA DX,MSG_3
+    MOV AH,09
+    INT 21H
+    ;GET SECOND NUMBER
+    MOV AH,01
+    INT 21H
+    ;CONVERT FROM ASCII
+    AND AL,0FH
+    ;SAVE IN MEMORY
+    MOV DI,OFFSET NUM_2
+    MOV [DI],AL  
+    
+ 
+    ;SET CURSOR POSITION FOR RESULT
+    MOV AH,02
+    MOV BH,00
+    MOV DH,04 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H
+        
+;DISCOVER THE OPERATOR  
+    ;OP CODES
+    ;+  2B
+    ;-  2D
+    ;*  2A
+    ;/  2F
+    
+    MOV AL,OP ;Put the opcode in AL
+    
+    ;CHECK IF ADDING
+    CMP AL,2BH
+    JE ADD_OP
+    
+    ;CHECK IF SUBTRACTING
+    CMP AL,2DH
+    JE SUB_OP
+    
+    ;CHECK IF MULTIPLYING
+    CMP AL,2AH
+    JE MULT_OP
+    
+    ;CHECK IF DIVIDING
+    CMP AL,2FH
+    JE DIV_OP
+    
+    ;NOW AT ERROR... OPERATOR NOT VALID
+    
+ADD_OP:
+    ;DO ADDITION
+    
+    MOV AH,NUM_1
+    MOV AL,NUM_2
+    ADD AL,AH
+    MOV DI,OFFSET RESULT
+    CBW
+    MOV [DI],AX
+    JS  NEG_RES
+    JNS POS_RES
+    
+SUB_OP:
+    ;DO SUBTRACTION
+    MOV AL,NUM_1
+    MOV AH,NUM_2
+    SUB AL,AH
+    MOV DI,OFFSET RESULT
+    CBW
+    MOV [DI],AX
+    JS  NEG_RES
+    JNS POS_RES
+    
+MULT_OP:
+    ;DO MULTIPLICATION
+    MOV AH,NUM_1
+    MOV AL,NUM_2
+    IMUL AH
+    MOV DI,OFFSET RESULT
+    MOV [DI],AX
+    JS  NEG_RES
+    JNS POS_RES
+    
+DIV_OP:
+    ;DO DIVISION
+    ;DO SUBTRACTION
+    MOV AL,NUM_1
+    MOV BL,NUM_2
+    CBW
+    IDIV BL
+    MOV DI,OFFSET REMAIN
+    ADD DI,12
+    ADD AH,30H
+    MOV [DI],AH 
+    CBW
+    MOV DI,OFFSET RESULT
+    MOV [DI],AL
+    MOV AH,02
+    MOV DL,'+'
+    INT 21H
+    JMP PRINT_REMAINDER        
+    
+NEG_RES:
+    ;CONVERT TO POS VAL
+    XOR AX,0FFFFH
+    INC AX
+    MOV DI,OFFSET RESULT
+    MOV [DI],AX 
+    
+    ;PRINT NEG SIGN
+    MOV AH,02
+    MOV DL,'-'
+    INT 21H           
+    JMP PRINT
+
+
+POS_RES:   
+    MOV AH,02
+    MOV DL,'+'
+    INT 21H
+    JMP PRINT
+    
+
+PRINT_REMAINDER:
+    ;SET CURSOR POSITION FOR REMAIN
+    MOV AH,02
+    MOV BH,00
+    MOV DH,05 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H  
+    
+    LEA DX,REMAIN
+    MOV AH,09
+    INT 21H    
+
+PRINT:     
+    ;SET CURSOR POSITION FOR RESULT
+    MOV AH,02
+    MOV BH,00
+    MOV DH,04 ;ROW VAL
+    MOV DL,01 ;COLUMN VAL
+    INT 10H
+    
+    
+    MOV SI,OFFSET RESULT
+    MOV AL,[SI]
+    MOV AH,[SI]
+    AND AH,0F0H ;AH CONTAINS HIGH BYTE
+    AND AL,00FH ;AL CONTAINS LOW  BYTE
+    MOV CL,4
+    SHR AH,CL
+    XCHG AH,AL
+
+    ;CONVERT TO ASCII
+    ADD AL,30H
+    CMP AL,3AH
+    JB  NEXT
+    ADD AL,07H 
+
+NEXT:
+    ADD AH,30H
+    CMP AH,3AH
+    JB  DONE  
+    ADD AH,07H
+DONE:
+    MOV BX,OFFSET ASC_OUT
+    
+;STORE VALUE
+    MOV [BX],AX 
+
+;PRINT VALUE
+    MOV AH,09
+    MOV DX,OFFSET ASC_OUT
+    INT 21H
+    
+    ;SET CURSOR POSITION FOR REMAINDER
+    MOV AH,02
+    MOV BH,00
+    MOV DH,04 ;ROW VAL
+    MOV DL,00 ;COLUMN VAL
+    INT 10H      
+
+    RET    
+MAIN ENDP
+
+ret
